@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DC Management Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .nav-link { transition: all 0.2s; border-bottom: 2px solid transparent; }
+        .nav-link:hover { border-bottom-color: #3b82f6; color: #1e3a8a; }
+        .nav-link.active { border-bottom-color: #1d4ed8; font-weight: 600; color: #1e3a8a; }
+        .parent-row { transition: background-color 0.2s; cursor: pointer; }
+        .parent-row:hover { background-color: #eff6ff; }
+        .parent-row.selected { background-color: #dbeafe; }
+        .loader { border-top-color: #3498db; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        /* Toast Notification */
+        #toast { visibility: hidden; min-width: 250px; background-color: #333; color: #fff; text-align: center; border-radius: 8px; padding: 16px; position: fixed; z-index: 10; left: 50%; transform: translateX(-50%); bottom: 30px; }
+        #toast.show { visibility: visible; -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
+        @-webkit-keyframes fadein { from { bottom: 0; opacity: 0; } to { bottom: 30px; opacity: 1; } }
+        @keyframes fadein { from { bottom: 0; opacity: 0; } to { bottom: 30px; opacity: 1; } }
+        @-webkit-keyframes fadeout { from { bottom: 30px; opacity: 1; } to { bottom: 0; opacity: 0; } }
+        @keyframes fadeout { from { bottom: 30px; opacity: 1; } to { bottom: 0; opacity: 0; } }
+        
+        /* Confirmation Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+        }
+        .modal-content {
+            background: white;
+            padding: 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+        .highlight {
+            background-color: #fcd34d;
+        }
+        /* Custom styles for the new workflow */
+        .item-row.selected td {
+            background-color: #dbeafe;
+        }
+        
+        /* Custom styles for this update */
+        #parent-table-container {
+            max-height: calc(100vh - 200px); /* Adjusts height based on viewport, subtracting header and margin */
+            overflow-y: auto; /* Enables vertical scrolling */
+        }
+
+        /* Full-Screen Loading Modal */
+        #loading-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            visibility: hidden;
+            opacity: 0;
+            transition: visibility 0.3s, opacity 0.3s;
+        }
+        #loading-modal.show {
+            visibility: visible;
+            opacity: 1;
+        }
+        .loading-content {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            width: 90%;
+            max-width: 450px;
+        }
+        .console-output {
+            background-color: #f1f5f9;
+            color: #334155;
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: left;
+            font-family: monospace;
+            overflow-y: auto;
+            max-height: 150px;
+            margin-top: 1rem;
+            word-break: break-all;
+        }
+        .spinner-loader {
+            border-top-color: #3b82f6;
+            border-left-color: #3b82f6;
+            animation: spin 1s linear infinite;
+        }
+        .spin-fast {
+            animation-duration: 0.5s;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex flex-col min-h-screen">
+    <!-- Header Navigation -->
+    <header class="bg-white shadow-md">
+        <div class="container mx-auto px-6 py-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-blue-800">DC Portal</h1>
+            <nav class="flex space-x-6 text-gray-600">
+                <a href="#" id="nav-view-dcs" class="nav-link active py-2">View DCs</a>
+                <a href="#" id="nav-add-dc" class="nav-link py-2">Add New DC</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto p-6 flex-grow flex flex-col">
+        <!-- View for Listing DCs -->
+        <div id="view-dcs-page">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">Delivery Challans</h2>
+            
+            <!-- Search Bar -->
+            <div class="mb-6">
+                <input type="text" id="search-input" placeholder="Search by DC number, supplier, or job type..." class="w-full p-3 border rounded-md shadow-sm focus:ring focus:ring-blue-200">
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                <!-- Left Partition -->
+                <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow-md">
+                    <div id="parent-table-container">
+                        <div class="flex justify-center items-center h-64">
+                            <div class="loader h-12 w-12 border-4 border-gray-200 rounded-full"></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Right Partition: Details and Actions -->
+                <div class="lg:col-span-3 bg-white p-6 rounded-lg shadow-md">
+                    <div id="child-container-wrapper" class="flex flex-col h-full">
+                           <div id="child-table-container" class="flex-grow">
+                             <div class="text-center text-gray-500 pt-10">Select a DC from the left to view its items and actions.</div>
+                           </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- View for Adding a New DC -->
+        <div id="add-dc-page" class="hidden flex flex-col flex-grow h-full">
+            <h2 id="page-title" class="text-3xl font-bold text-gray-800 mb-6"></h2>
+            <!-- Step 1: Item Selection -->
+            <div id="item-selection-view" class="flex flex-col flex-grow">
+                <div class="bg-white p-6 rounded-lg shadow-md flex flex-col flex-grow">
+                    <div class="flex flex-col md:flex-row justify-between items-center mb-4 space-y-4 md:space-y-0 md:space-x-4">
+                        <div id="selected-items-summary" class="text-lg font-semibold text-gray-700 w-full md:w-auto">Selected Items: 0</div>
+                        <select id="job-work-filter" class="p-3 border rounded-md shadow-sm focus:ring focus:ring-blue-200 w-full md:w-auto">
+                            <option value="">Choose Job Work</option>
+                        </select>
+                        <input type="text" id="item-search-input" placeholder="Search for an item..." class="w-full max-w-sm p-3 border rounded-md shadow-sm focus:ring focus:ring-blue-200">
+                    </div>
+                    <div id="tracker-table-container" class="flex-grow overflow-y-auto" style="max-height: calc(100vh - 350px);">
+                        <div class="text-center text-gray-500 pt-10">Please choose a Job Work to view items.</div>
+                    </div>
+                    <div class="mt-6 text-right space-x-2 flex flex-col md:flex-row justify-end space-y-2 md:space-y-0 md:space-x-2">
+                        <button type="button" id="clear-selection-btn" class="bg-red-500 text-white font-bold px-6 py-3 rounded-md hover:bg-red-600">Clear Selection</button>
+                        <button type="button" id="proceed-btn" class="bg-blue-600 text-white font-bold px-6 py-3 rounded-md hover:bg-blue-700">Proceed</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: DC Details Form -->
+            <div id="dc-form-view" class="hidden flex flex-col flex-grow">
+                <form id="add-dc-form" class="space-y-6 flex-grow bg-white p-8 rounded-lg shadow-md">
+                    <input type="hidden" id="dc-transfer-id" name="dc-transfer-id">
+                    <div id="transfer-id-display" class="mb-4 hidden">
+                        <div class="flex justify-between items-center">
+                            <label class="text-sm font-semibold text-gray-700">Transfer ID</label>
+                            <button type="button" id="generate-id-btn" class="bg-blue-500 text-white px-3 py-1 rounded-md text-xs hover:bg-blue-600">Generate New ID</button>
+                        </div>
+                        <p id="transfer-id-value" class="mt-1 p-3 bg-gray-100 rounded-md text-gray-600 font-mono"></p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <select id="prepared-by-select" name="Prepared By" class="p-3 border rounded-md" required>
+                            <option value="">Prepared By</option>
+                        </select>
+                        <select id="from-supplier-select" name="From Supplier" class="p-3 border rounded-md" required>
+                            <option value="">From Supplier</option>
+                        </select>
+                        <select id="to-supplier-select" name="To Supplier" class="p-3 border rounded-md" required>
+                            <option value="">To Supplier</option>
+                        </select>
+                        <input type="text" name="Job Type" placeholder="Job Type" class="p-3 border rounded-md bg-gray-100 cursor-not-allowed" readonly required>
+                        <input type="url" name="DC Link" placeholder="DC Link (Optional)" class="md:col-span-2 p-3 border rounded-md">
+                    </div>
+                    <div class="border-t pt-6 flex-grow">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4">Selected Items</h3>
+                        <div id="items-list" class="space-y-4"></div>
+                    </div>
+                    <div class="text-right border-t pt-6 flex justify-end items-center space-x-4">
+                        <button type="button" id="back-btn" class="bg-gray-500 text-white font-bold px-6 py-3 rounded-md hover:bg-gray-600">Back</button>
+                        <button type="submit" class="bg-green-600 text-white font-bold px-6 py-3 rounded-md hover:bg-green-700" data-action="addDc">Create DC</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <!-- Toast Notification Element -->
+    <div id="toast"></div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmation-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <p id="modal-message" class="text-lg text-gray-700 mb-6">Are you sure?</p>
+            <div class="flex justify-center space-x-4">
+                <button id="modal-cancel-btn" class="bg-gray-300 text-gray-800 font-bold px-4 py-2 rounded-md hover:bg-gray-400">Cancel</button>
+                <button id="modal-confirm-btn" class="bg-blue-600 text-white font-bold px-4 py-2 rounded-md hover:bg-blue-700">Confirm</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- New Full-Screen Loading Modal -->
+    <div id="loading-modal">
+        <div class="loading-content">
+            <div id="loading-spinner" class="spinner-loader h-16 w-16 border-4 border-gray-200 rounded-full mx-auto mb-6"></div>
+            <h3 id="loading-message" class="text-xl font-semibold text-gray-700 mb-4">Processing Request...</h3>
+            <div id="console-output" class="console-output"></div>
+            <div class="mt-4">
+              <button id="close-modal-btn" class="bg-gray-300 text-gray-800 font-bold px-4 py-2 rounded-md hover:bg-gray-400 hidden">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // *** IMPORTANT: You must update this URL with the URL from your single Apps Script deployment. ***
+        const EXEC_URL = 'https://script.google.com/macros/s/AKfycbyWFMoCzVB6zuQC--UdWZdQXBUH-MzsaHWBsCdcGiljxGT_0k3j_b0b0nh7BZfFjaZrIA/exec';
+        
+        let allDcData = [];
+        let allDcItemsData = [];
+        let filteredDcData = [];
+        let allTrackerItems = [];
+        let allOperations = [];
+        let allUsers = [];
+        let allSuppliers = [];
+        let selectedItems = new Map();
+        let currentEditingDc = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            setupEventListeners();
+            fetchData();
+        });
+
+        function setupEventListeners() {
+            document.getElementById('nav-view-dcs').addEventListener('click', (e) => { e.preventDefault(); switchPage('view-dcs'); });
+            document.getElementById('nav-add-dc').addEventListener('click', (e) => { e.preventDefault(); switchPage('add-dc'); });
+            document.getElementById('add-dc-form').addEventListener('submit', handleAddOrUpdateDcSubmit);
+            document.getElementById('search-input').addEventListener('input', filterDcs);
+            
+            document.getElementById('job-work-filter').addEventListener('change', () => {
+                if(selectedItems.size > 0) {
+                    showConfirmationModal('Changing the Job Work will clear your current item selection. Do you want to continue?', () => {
+                        selectedItems.clear();
+                        renderTrackerTable(document.getElementById('item-search-input').value);
+                        hideConfirmationModal();
+                    });
+                } else {
+                    renderTrackerTable(document.getElementById('item-search-input').value);
+                }
+            });
+            document.getElementById('item-search-input').addEventListener('input', () => renderTrackerTable(document.getElementById('item-search-input').value));
+            document.getElementById('proceed-btn').addEventListener('click', proceedToForm);
+            document.getElementById('back-btn').addEventListener('click', backToItemSelection);
+            document.getElementById('clear-selection-btn').addEventListener('click', clearSelection);
+            document.getElementById('generate-id-btn').addEventListener('click', generateNewTransferId);
+            document.getElementById('close-modal-btn').addEventListener('click', hideLoadingModal);
+        }
+
+        function switchPage(page, isCancel = false) {
+            document.getElementById('view-dcs-page').classList.toggle('hidden', page !== 'view-dcs');
+            document.getElementById('add-dc-page').classList.toggle('hidden', page !== 'add-dc');
+            document.getElementById('nav-view-dcs').classList.toggle('active', page === 'view-dcs');
+            document.getElementById('nav-add-dc').classList.toggle('active', page === 'add-dc');
+            
+            // Only render tables when their page is active
+            if (page === 'view-dcs') {
+                renderParentTable(filteredDcData);
+            } else if (page === 'add-dc' && !isCancel) {
+                const pageTitle = document.getElementById('page-title');
+                if(pageTitle) pageTitle.textContent = 'Select Items';
+                const submitButton = document.querySelector('#add-dc-form button[type="submit"]');
+                if(submitButton) submitButton.textContent = 'Create DC';
+
+                document.getElementById('add-dc-form').reset();
+                selectedItems.clear();
+                showItemSelectionView();
+                renderTrackerTable('');
+                generateNewTransferId();
+            }
+        }
+
+        async function fetchData() {
+            try {
+                const parentContainer = document.getElementById('parent-table-container');
+                const childContainer = document.getElementById('child-table-container');
+                if(parentContainer) parentContainer.innerHTML = `<div class="flex justify-center items-center h-64"><div class="loader h-12 w-12 border-4 border-gray-200 rounded-full"></div></div>`;
+                if(childContainer) childContainer.innerHTML = `<div class="flex justify-center items-center h-64"><div class="loader h-12 w-12 border-4 border-gray-200 rounded-full"></div></div>`;
+                
+                const response = await fetch(`${EXEC_URL}?action=getData`);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+                
+                const drafts = data.dc.filter(d => d.Status === 'Draft').sort((a,b) => new Date(b.Timestamp) - new Date(a.Timestamp));
+                const others = data.dc.filter(d => d.Status !== 'Draft').sort((a,b) => {
+                    const numA = parseInt((a['DC Number'] || 'DC-0').split('-')[1] || 0);
+                    const numB = parseInt((b['DC Number'] || 'DC-0').split('-')[1] || 0);
+                    return numB - numA;
+                });
+
+                allDcData = [...drafts, ...others];
+                allDcItemsData = data.dc_items;
+                allTrackerItems = data.tracker;
+                allOperations = Array.isArray(data.operations) ? data.operations.map(op => op.OperationsName) : [];
+                allUsers = Array.isArray(data.users) ? data.users.map(user => user.Username) : [];
+                allSuppliers = Array.isArray(data.suppliers) ? data.suppliers.map(supplier => supplier.SupplierShort) : [];
+                filteredDcData = [...allDcData];
+
+                renderParentTable(filteredDcData);
+                clearChildView();
+                populateOperationsDropdown();
+                populateDcFormDropdowns();
+                renderTrackerTable('');
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                document.getElementById('parent-table-container').innerHTML = `<p class="text-red-600">Failed to load data. Please check deployment permissions and console.</p>`;
+                clearChildView();
+            }
+        }
+        
+        function populateOperationsDropdown() {
+            const dropdown = document.getElementById('job-work-filter');
+            dropdown.innerHTML = '<option value="">Choose Job Work</option>';
+            allOperations.forEach(op => {
+                const option = document.createElement('option');
+                option.value = op;
+                option.textContent = op;
+                dropdown.appendChild(option);
+            });
+        }
+        
+        function populateDcFormDropdowns() {
+            const preparedBySelect = document.getElementById('prepared-by-select');
+            const fromSupplierSelect = document.getElementById('from-supplier-select');
+            const toSupplierSelect = document.getElementById('to-supplier-select');
+            
+            // Clear existing options
+            preparedBySelect.innerHTML = '<option value="">Prepared By</option>';
+            fromSupplierSelect.innerHTML = '<option value="">From Supplier</option>';
+            toSupplierSelect.innerHTML = '<option value="">To Supplier</option>';
+            
+            allUsers.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user;
+                option.textContent = user;
+                preparedBySelect.appendChild(option);
+            });
+            
+            allSuppliers.forEach(supplier => {
+                const option = document.createElement('option');
+                option.value = supplier;
+                option.textContent = supplier;
+                fromSupplierSelect.appendChild(option.cloneNode(true));
+                toSupplierSelect.appendChild(option);
+            });
+        }
+
+        function filterDcs() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            if (!searchTerm) {
+                filteredDcData = allDcData;
+            } else {
+                filteredDcData = allDcData.filter(dc => 
+                    (dc['DC Number'] && String(dc['DC Number']).toLowerCase().includes(searchTerm)) ||
+                    (dc['Prepared By'] && String(dc['Prepared By']).toLowerCase().includes(searchTerm)) ||
+                    (dc['To Supplier'] && String(dc['To Supplier']).toLowerCase().includes(searchTerm)) ||
+                    (dc['Job Type'] && String(dc['Job Type']).toLowerCase().includes(searchTerm))
+                );
+            }
+            renderParentTable(filteredDcData);
+        }
+
+        function renderParentTable(dcList) {
+            const parentContainer = document.getElementById('parent-table-container');
+            if (!parentContainer) return; // Add this check to prevent the error
+
+            if (!dcList || dcList.length === 0) {
+                parentContainer.innerHTML = `<p class="text-gray-500 text-center mt-8">No DCs found.</p>`;
+                return;
+            }
+            const dcCardsHtml = dcList.map(dc => {
+                const statusColor = dc.Status === 'Draft' ? 'bg-orange-500' : 'bg-green-500';
+                const dcNumberDisplay = dc['DC Number'] || dc.TransferID;
+                const formattedDate = new Date(dc.Timestamp).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+                return `
+                    <div data-transferid="${dc.TransferID}" onclick="showChildItems('${dc.TransferID}', this)" class="parent-row bg-white rounded-lg shadow-md p-3 mb-2 flex justify-between items-center">
+                        <div class="flex-grow">
+                            <div class="text-sm font-bold text-gray-900 flex items-center">
+                                <span class="inline-block w-2 h-2 ${statusColor} rounded-full mr-2"></span>
+                                ${dcNumberDisplay}
+                            </div>
+                            <div class="text-xs text-gray-500">${formattedDate}</div>
+                            <div class="text-xs font-medium text-gray-700">${dc['Prepared By']}</div>
+                        </div>
+                        <div class="flex-shrink-0 text-right">
+                            <div class="text-sm font-semibold text-gray-800">${dc['To Supplier']}</div>
+                            <div class="text-xs text-gray-600">${dc['Job Type']}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            parentContainer.innerHTML = dcCardsHtml;
+        }
+
+        function showChildItems(transferId, rowElement) {
+            document.querySelectorAll('.parent-row').forEach(row => row.classList.remove('selected'));
+            rowElement.classList.add('selected');
+
+            const dc = allDcData.find(d => d.TransferID === transferId);
+            const items = allDcItemsData.filter(item => String(item.TransferID) === String(transferId));
+            const childContainer = document.getElementById('child-table-container');
+            
+            // Show loader while content is being prepared
+            childContainer.innerHTML = `<div class="flex justify-center items-center h-64"><div class="loader h-12 w-12 border-4 border-gray-200 rounded-full"></div></div>`;
+
+            let itemsHtml = `<div class="text-center text-gray-500 pt-10">No items for this DC.</div>`;
+            if (items.length > 0) {
+                itemsHtml = `
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-sm text-left text-gray-600">
+                            <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                <tr><th class="px-4 py-2">S.No</th><th class="px-4 py-2">Item Details</th><th class="px-4 py-2">Qty</th></tr>
+                            </thead>
+                            <tbody>
+                                ${items.map((item, index) => {
+                                    const itemDetails = allTrackerItems.find(tItem => String(tItem.ItemCode) === String(item.ItemCode));
+                                    const itemDisplay = itemDetails ? `${itemDetails.ItemCode} - ${itemDetails.Item} (${itemDetails.Description})` : item.ItemCode;
+                                    return `
+                                        <tr class="bg-white border-b"><td class="px-4 py-2">${index + 1}</td><td class="px-4 py-2 font-medium">${itemDisplay}</td><td class="px-4 py-2">${item.Quantity}</td></tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>`;
+            }
+
+            let actionBarHtml = '';
+            if (dc.Status === 'Draft') {
+                actionBarHtml = `
+                    <button onclick="showConfirmationModal('Are you sure you want to PERMANENTLY DELETE this draft?', () => deleteDcAction('${dc.TransferID}'))" class="bg-red-600 text-white font-bold px-4 py-2 rounded-md hover:bg-red-700">Delete</button>
+                    <button onclick="showConfirmationModal('Are you sure you want to submit this DC? This action cannot be undone.', () => submitDcAction('${dc.TransferID}'))" class="bg-green-600 text-white font-bold px-4 py-2 rounded-md hover:bg-green-700">Submit</button>
+                `;
+            } else if (dc.Status === 'Submitted' && dc['DC Link']) {
+                actionBarHtml = `<a href="${dc['DC Link']}" target="_blank" class="inline-block bg-green-600 text-white font-bold px-4 py-2 rounded-md hover:bg-green-700">Print</a>`;
+            }
+
+            childContainer.innerHTML = `
+                <div class="flex flex-col h-full">
+                    <div class="flex items-baseline justify-between">
+                      <h3 class="text-xl font-semibold text-gray-700 mb-4">Details for ${dc['DC Number'] || 'Draft'}</h3>
+                      <span class="text-sm font-semibold text-gray-500">Status: ${dc.Status}</span>
+                    </div>
+                    <div class="flex-grow overflow-y-auto">${itemsHtml}</div>
+                    <div class="border-t mt-4 pt-4 text-right space-x-2">${actionBarHtml}</div>
+                </div>
+            `;
+        }
+        
+        function clearChildView() {
+            document.getElementById('child-table-container').innerHTML = `<div class="text-center text-gray-500 pt-10">Select a DC from the left to view its items and actions.</div>`;
+        }
+        
+        function showLoadingModal(message, isError = false) {
+            const modal = document.getElementById('loading-modal');
+            const consoleOutput = document.getElementById('console-output');
+            const spinner = document.getElementById('loading-spinner');
+            const messageElement = document.getElementById('loading-message');
+            const closeBtn = document.getElementById('close-modal-btn');
+            
+            // Clear previous content and set new message
+            consoleOutput.innerHTML = '';
+            messageElement.textContent = message;
+            
+            if (isError) {
+                spinner.classList.add('hidden');
+                closeBtn.classList.remove('hidden');
+            } else {
+                spinner.classList.remove('hidden');
+                closeBtn.classList.add('hidden');
+            }
+            modal.classList.add('show');
+        }
+
+        function hideLoadingModal() {
+            document.getElementById('loading-modal').classList.remove('show');
+            document.getElementById('loading-spinner').classList.remove('hidden');
+            document.getElementById('close-modal-btn').classList.add('hidden');
+        }
+
+        function logToConsole(message, type = 'info') {
+            const consoleOutput = document.getElementById('console-output');
+            const p = document.createElement('p');
+            p.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            if (type === 'error') p.style.color = '#dc2626';
+            consoleOutput.appendChild(p);
+            consoleOutput.scrollTop = consoleOutput.scrollHeight; // Auto-scroll
+        }
+
+        async function submitDcAction(transferId) {
+            if (!transferId || String(transferId).trim() === '') {
+                showToast('Error: Cannot submit a DC without a valid Transfer ID. Please ensure the draft has an ID.', 'error');
+                return;
+            }
+
+            hideConfirmationModal();
+            showLoadingModal('Connecting to server...');
+
+            try {
+                logToConsole('Sending submission request...');
+                const response = await fetch(EXEC_URL, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'text/plain;charset=utf-8'},
+                    body: JSON.stringify({ action: 'generateAndSubmitDc', transferId: transferId })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.status !== 'success') {
+                    throw new Error(result.message || 'Unknown server error.');
+                }
+                
+                logToConsole('DC submitted successfully! PDF generated.', 'success');
+                logToConsole('Reloading data...');
+                await fetchData();
+                logToConsole('Data reloaded. You can now close this window.');
+                document.getElementById('close-modal-btn').classList.remove('hidden');
+                
+            } catch (error) {
+                logToConsole(`Submission Failed: ${error.message}`, 'error');
+                showLoadingModal('Submission Failed.', true); // Show error state
+            }
+        }
+
+        async function deleteDcAction(transferId) {
+            hideConfirmationModal();
+            showToast('Deleting DC...');
+            try {
+                const response = await fetch(EXEC_URL, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'text/plain;charset=utf-8'},
+                    body: JSON.stringify({ action: 'deleteDc', transferId: transferId })
+                });
+                const result = await response.json();
+                if (result.status !== 'success') throw new Error(result.message);
+                showToast('DC deleted successfully!', 'success');
+                fetchData();
+            } catch (error) {
+                console.error('Error deleting DC:', error);
+                showToast(`Deletion Failed: ${error.message}`, 'error');
+            }
+        }
+        
+        function editDc(transferId) {
+            // No-op function as the edit button has been removed
+        }
+
+        async function handleAddOrUpdateDcSubmit(event) {
+            event.preventDefault();
+            const submitButton = event.target.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            submitButton.textContent = 'Processing...';
+
+            const transferId = document.getElementById('dc-transfer-id').value;
+            const action = submitButton.dataset.action;
+
+            const formData = new FormData(event.target);
+            const dcData = Object.fromEntries(formData.entries());
+
+            const itemsData = Array.from(document.querySelectorAll('.final-item-row')).map(row => {
+                const itemCode = row.dataset.itemCode;
+                const note = row.querySelector('input[name="Note"]')?.value;
+                return { ItemCode: itemCode, Quantity: 1, Note: note };
+            }).filter(item => item.ItemCode);
+
+            if (itemsData.length === 0) {
+                showToast('Error: You must add at least one item.', 'error');
+                submitButton.disabled = false;
+                submitButton.textContent = action === 'addDc' ? 'Create DC' : 'Update DC';
+                return;
+            }
+
+            try {
+                showToast(action === 'addDc' ? 'Creating new DC...' : 'Updating DC...');
+                const response = await fetch(EXEC_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action, transferId, dcData, itemsData })
+                });
+                const result = await response.json();
+                if (result.status !== 'success') throw new Error(result.message);
+                showToast(result.message, 'success');
+                await fetchData(); 
+                switchPage('view-dcs'); 
+            } catch (error) {
+                console.error(`Error ${action === 'addDc' ? 'adding' : 'updating'} DC:`, error);
+                showToast(`Operation Failed: ${error.message}`, 'error');
+            } finally {
+                submitButton.disabled = false;
+                submitButton.textContent = action === 'addDc' ? 'Create DC' : 'Update DC';
+            }
+        }
+        
+        function renderTrackerTable(searchTerm) {
+            const container = document.getElementById('tracker-table-container');
+            const term = searchTerm.toLowerCase();
+            const selectedJobWork = document.getElementById('job-work-filter').value;
+
+            if (!selectedJobWork) {
+                container.innerHTML = `<p class="text-center text-gray-500 pt-10">Please choose a Job Work to view items.</p>`;
+                return;
+            }
+            
+            const filteredItems = allTrackerItems.filter(item => {
+                const matchesSearch = 
+                    (item.ItemCode && String(item.ItemCode).toLowerCase().includes(term)) ||
+                    (item.Item && String(item.Item).toLowerCase().includes(term)) ||
+                    (item.Description && String(item.Description).toLowerCase().includes(term));
+                
+                const matchesJobWork = (item.Operations && String(item.Operations).split(',').map(s => s.trim().toLowerCase()).includes(selectedJobWork.toLowerCase()));
+
+                return matchesSearch && matchesJobWork;
+            });
+
+            const getHighlightedText = (text, highlight) => {
+                if (!highlight) return text;
+                const parts = text.split(new RegExp(`(${highlight})`, 'gi'));
+                return parts.map(part => part.toLowerCase() === highlight.toLowerCase() ? `<span class="highlight">${part}</span>` : part).join('');
+            };
+
+            const tableHtml = `
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm text-left text-gray-600">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3">S.No</th>
+                                <th class="px-4 py-3">Item Code</th>
+                                <th class="px-4 py-3">Item</th>
+                                <th class="px-4 py-3">Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${filteredItems.map((item, index) => {
+                                const isSelected = selectedItems.has(item.ItemCode);
+                                const rowClass = isSelected ? 'bg-blue-100' : 'bg-white';
+                                return `
+                                    <tr 
+                                        data-item-code="${item.ItemCode}" 
+                                        class="${rowClass} border-b hover:bg-gray-50 cursor-pointer"
+                                        onclick="toggleItemSelection('${item.ItemCode}', this)"
+                                    >
+                                        <td class="px-4 py-2">${index + 1}</td>
+                                        <td class="px-4 py-2">${getHighlightedText(item.ItemCode, term)}</td>
+                                        <td class="px-4 py-2">${getHighlightedText(item.Item, term)}</td>
+                                        <td class="px-4 py-2">${getHighlightedText(item.Description, term)}</td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            container.innerHTML = tableHtml;
+            updateSelectedItemsSummary();
+        }
+
+        function toggleItemSelection(itemCode, rowElement) {
+            const isSelected = selectedItems.has(itemCode);
+            if (isSelected) {
+                selectedItems.delete(itemCode);
+                rowElement.classList.remove('selected', 'bg-blue-100');
+            } else {
+                const itemDetails = allTrackerItems.find(item => item.ItemCode === itemCode);
+                if (itemDetails) {
+                    selectedItems.set(itemCode, {
+                        ...itemDetails,
+                        Note: '' // Notes will be added on the next screen.
+                    });
+                    rowElement.classList.add('selected', 'bg-blue-100');
+                }
+            }
+            updateSelectedItemsSummary();
+        }
+
+        function clearSelection() {
+            selectedItems.clear();
+            document.querySelectorAll('#tracker-table-container tr').forEach(row => {
+                row.classList.remove('selected', 'bg-blue-100');
+            });
+            updateSelectedItemsSummary();
+        }
+
+        function updateSelectedItemsSummary() {
+            const summaryElement = document.getElementById('selected-items-summary');
+            if (summaryElement) {
+                summaryElement.textContent = `Selected Items: ${selectedItems.size}`;
+            }
+        }
+        
+        function showItemSelectionView() {
+            document.getElementById('item-selection-view').classList.remove('hidden');
+            document.getElementById('dc-form-view').classList.add('hidden');
+        }
+
+        function showDcFormView() {
+            document.getElementById('item-selection-view').classList.add('hidden');
+            document.getElementById('dc-form-view').classList.remove('hidden');
+        }
+        
+        function proceedToForm() {
+            if (selectedItems.size === 0) {
+                showToast('Please select at least one item.', 'error');
+                return;
+            }
+            
+            const itemsList = document.getElementById('items-list');
+            itemsList.innerHTML = '';
+            selectedItems.forEach((item) => {
+                const newItemRow = createFinalItemRow(item.ItemCode, item.Note);
+                itemsList.appendChild(newItemRow);
+            });
+            showDcFormView();
+            const selectedJobWork = document.getElementById('job-work-filter').value;
+            document.querySelector('#add-dc-form input[name="Job Type"]').value = selectedJobWork;
+        }
+
+        function backToItemSelection() {
+            const pageTitle = document.getElementById('page-title');
+            if(pageTitle) pageTitle.textContent = 'Select Items';
+            showItemSelectionView();
+        }
+        
+        function generateNewTransferId() {
+            const newId = `DC-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+            document.getElementById('dc-transfer-id').value = newId;
+            document.getElementById('transfer-id-value').textContent = newId;
+
+            // Reset form fields
+            document.getElementById('add-dc-form').reset();
+            document.getElementById('items-list').innerHTML = '';
+            
+            // Show the transfer ID display and generate button for new DC
+            document.getElementById('transfer-id-display').classList.remove('hidden');
+            document.getElementById('generate-id-btn').classList.remove('hidden');
+            const submitButton = document.querySelector('#add-dc-form button[type="submit"]');
+            if(submitButton) submitButton.textContent = 'Create DC';
+            if(submitButton) submitButton.dataset.action = 'addDc';
+        }
+
+        function createFinalItemRow(itemCode, note = '') {
+            const div = document.createElement('div');
+            div.className = 'final-item-row space-y-2 border border-gray-200 p-4 rounded-md';
+            div.dataset.itemCode = itemCode;
+
+            const itemDetails = allTrackerItems.find(item => String(item.ItemCode) === String(itemCode));
+            const itemDisplay = itemDetails ? `<strong>${itemDetails.ItemCode}</strong> - ${itemDetails.Item} (${itemDetails.Description})` : itemCode;
+            
+            div.innerHTML = `
+                <div class="flex justify-between items-center mb-2">
+                    <div class="text-gray-700 font-bold text-lg break-words flex-grow mr-4">${itemDisplay}</div>
+                    <button type="button" onclick="this.closest('.final-item-row').remove(); updateSelectedItemsSummary();" class="bg-red-500 text-white rounded-md hover:bg-red-600 px-4 py-2 flex-shrink-0">-</button>
+                </div>
+                <div>
+                    <input type="text" name="Note" placeholder="Note (Optional)" class="w-full p-2 border rounded-md" value="${note}">
+                </div>
+            `;
+            return div;
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'show';
+            if (type === 'success') toast.style.backgroundColor = '#28a745';
+            else if (type === 'error') toast.style.backgroundColor = '#dc3545';
+            else toast.style.backgroundColor = '#333';
+            setTimeout(() => { toast.className = toast.className.replace('show', ''); }, 3000);
+        }
+
+        let confirmationCallback = null;
+
+        function showConfirmationModal(message, callback) {
+            document.getElementById('modal-message').textContent = message;
+            document.getElementById('confirmation-modal').classList.remove('hidden');
+            confirmationCallback = callback;
+        }
+
+        function hideConfirmationModal() {
+            document.getElementById('confirmation-modal').classList.add('hidden');
+            confirmationCallback = null;
+        }
+
+        document.getElementById('modal-confirm-btn').addEventListener('click', () => {
+            if (confirmationCallback) {
+                confirmationCallback();
+            }
+        });
+
+        document.getElementById('modal-cancel-btn').addEventListener('click', hideConfirmationModal);
+    </script>
+</body>
+</html>
