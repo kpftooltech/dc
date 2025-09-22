@@ -31,19 +31,19 @@ function serverGet(action, params = {}) {
 
 /**
  * Helper function to make POST requests for saving/deleting data.
- * This is the complete function that was missing before.
  */
 async function serverPost(action, payload) {
+    // We use a redirect workaround for doPost with Apps Script in a no-cors environment
     const response = await fetch(SCRIPT_URL, {
         method: 'POST',
-        mode: 'no-cors', // Use no-cors for doPost with Apps Script
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // Use text/plain for no-cors
-        body: JSON.stringify({ action, payload })
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action, payload }),
+        redirect: 'follow'
     });
-
-    // With no-cors, the response is 'opaque', so we can't read its content.
-    // We will just assume it was successful and let the server handle any errors.
-    return { success: true, message: 'Action sent to server.' }; 
+    // With no-cors, the response is 'opaque', so we can't read its content directly.
+    // We assume it was successful and let the server handle any errors.
+    return { success: true, message: 'Action sent to server.' };
 }
 
 function app() {
@@ -57,6 +57,7 @@ function app() {
 
         async init() {
             try {
+                this.isLoading = true;
                 const [ddData, dcList] = await Promise.all([
                     serverGet('getDropdownData'),
                     serverGet('getDcs')
@@ -87,7 +88,7 @@ function app() {
         },
 
         showForm(dc = null) {
-            if (dc) { this.formDc = JSON.parse(JSON.stringify(dc)); } 
+            if (dc) { this.formDc = JSON.parse(JSON.stringify(dc)); }
             else { this.formDc = { Status: 'Draft', items: [{ ItemCode: '', Quantity: '', Note: '' }] }; }
             this.view = 'form';
         },
@@ -107,7 +108,7 @@ function app() {
         },
         
         async deleteDc(transferId) {
-            if (!confirm('Are you sure?')) return;
+            if (!confirm('Are you sure you want to delete this DC?')) return;
             this.isLoading = true;
             try {
                 await serverPost('deleteDc', { transferId });
@@ -126,3 +127,4 @@ function app() {
         cancelEdit() { this.view = this.currentDc ? 'details' : 'welcome'; }
     }
 }
+
