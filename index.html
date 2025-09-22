@@ -1,10 +1,19 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Delivery Challan System</title>
+    
+    <!-- Tailwind CSS (CDN is fine for this project) -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+    
+    <!-- Your App Logic (Load this FIRST) -->
     <script src="script.js"></script>
+    
+    <!-- Alpine.js (with defer, loaded AFTER your script) -->
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+    
     <style>
         .loader { border: 5px solid #f3f3f3; border-top: 5px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -12,6 +21,9 @@
     </style>
 </head>
 <body class="bg-gray-100 font-sans">
+
+    <!-- The rest of your HTML body (the part starting with <div x-data="app()">...) remains exactly the same. -->
+    <!-- It is omitted here for brevity, but you should use the full version from the previous response. -->
     <div x-data="app()" x-init="init()" x-cloak>
         <div class="flex h-screen">
             <!-- Left Pane: DC List -->
@@ -25,16 +37,21 @@
                 <div class="overflow-y-auto flex-grow">
                     <template x-for="dc in dcs" :key="dc.TransferID">
                         <div @click="selectDc(dc.TransferID)" class="p-4 border-b hover:bg-blue-50 cursor-pointer">
-                            <p class="font-bold" x-text="dc.DcNumber || 'DRAFT'"></p>
-                            <span :class="{ 'bg-green-100 text-green-800': dc.Status === 'Submitted', 'bg-orange-100 text-orange-800': dc.Status === 'Draft' }" x-text="dc.Status"></span>
-                            <!-- Other details -->
+                            <div class="flex justify-between items-center">
+                                <p class="font-bold text-gray-900" x-text="dc.DcNumber || 'DRAFT'"></p>
+                                <span class="text-xs font-semibold px-2 py-1 rounded-full"
+                                      :class="{ 'bg-green-100 text-green-800': dc.Status === 'Submitted', 'bg-orange-100 text-orange-800': dc.Status === 'Draft' }"
+                                      x-text="dc.Status"></span>
+                            </div>
+                            <p class="text-sm text-gray-600">To: <span x-text="dc.ToSupplier"></span></p>
+                            <p class="text-xs text-gray-400">By: <span x-text="dc.PreparedBy"></span> on <span x-text="new Date(dc.Timestamp).toLocaleDateString()"></span></p>
                         </div>
                     </template>
                 </div>
             </div>
             <!-- Right Pane: Details / Form -->
             <div class="w-2/3 flex flex-col p-6 bg-gray-50 overflow-y-auto">
-                <!-- All the template views (welcome, details, form) from the previous Alpine.js version go here. They don't need to change. -->
+                 <!-- All the template views (welcome, details, form) from the previous Alpine.js version go here. -->
             </div>
         </div>
         <!-- Loader Overlay -->
@@ -44,3 +61,4 @@
     </div>
 </body>
 </html>
+
