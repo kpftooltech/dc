@@ -1,5 +1,5 @@
 // IMPORTANT: Replace this with your actual Web App URL from Google Apps Script
-const SCRIPT_URL = "YOUR_WEB_APP_URL_HERE";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzYjeM3iIRUi_G6BdjEiyy28EO-BUiQk5hT2OEOQLr9_WcoZHF2aTwiHKn6cio1DXadZA/exec";
 
 // Helper function to make GET requests to our API
 async function serverGet(action, params = {}) {
